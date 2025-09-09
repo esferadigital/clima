@@ -1,0 +1,2 @@
+# clima
+Weather forecast CLI
