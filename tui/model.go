@@ -7,9 +7,6 @@ import (
 	"github.com/esferadigital/clima/openmeteo"
 )
 
-const DEFAULT_LATITUDE = -2.1885029262472884
-const DEFAULT_LONGITUDE = -81.00949365444902
-
 type ModelStatus int
 
 const (
