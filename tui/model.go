@@ -54,9 +54,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	switch m.status {
 	case statusLoading:
-		return "Getting the weather ... (press q to quit)\n"
+		return "\nGetting the weather ... (press q to quit)\n"
 	case statusFailed:
-		return fmt.Sprintf("Failed to get the weather: %v\n", m.err)
+		return fmt.Sprintf("\nFailed to get the weather: %v\n", m.err)
 	case statusLoaded:
 		forecast := m.weather
 		s := ""
