@@ -32,3 +32,4 @@ func WriteVariableCSV(variables []CurrentWeatherVariables) string {
 	}
 	return strings.Join(variableNames, ",")
 }
+

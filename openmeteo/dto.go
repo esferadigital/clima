@@ -24,3 +24,4 @@ type ForecastResponse struct {
 	CurrentUnits     map[string]any `json:"current_units"`
 	Current          map[string]any `json:"current"`
 }
+
