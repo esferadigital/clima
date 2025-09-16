@@ -3,101 +3,225 @@ package tui
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/esferadigital/clima/openmeteo"
 )
 
+// LocationItem wraps GeocodingResult to implement list.Item interface
+type LocationItem struct {
+	openmeteo.GeocodingResult
+}
+
+// FilterValue implements the list.Item interface
+func (l LocationItem) FilterValue() string {
+	return l.Name
+}
+
+// Title returns the display title for the list item
+func (l LocationItem) Title() string {
+	return fmt.Sprintf("%s, %s", l.Name, l.Country)
+}
+
+// Description returns the display description for the list item
+func (l LocationItem) Description() string {
+	return fmt.Sprintf("Lat: %.4f, Lon: %.4f", l.Latitude, l.Longitude)
+}
+
+// ---- status; part of model, and used to conditionally render content ----
+
 type ModelStatus int
 
 const (
-	statusLoading ModelStatus = iota
-	statusLoaded
-	statusFailed
+	// search location
+	locationSearch = iota
+	locationLoading
+	locationPick
+	locationFailed
+
+	// forecast
+	forecastLoading
+	forecastReady
+	forecastFailed
 )
 
-type Model struct {
-	status ModelStatus
-	weather openmeteo.ForecastResponse
-	err error
+// ---- messages ----
+type locationMsg struct {
+	locations []openmeteo.GeocodingResult
+	picked    openmeteo.GeocodingResult
+	failed    bool
 }
 
-func InitialModel() Model {
-	return Model{ status: statusLoading }
+type forecastMsg struct {
+	forecast openmeteo.ForecastResponse
+	failed   bool
+}
+
+// ---- model ----
+
+type Model struct {
+	status        ModelStatus
+	locationInput textinput.Model
+	locations     []openmeteo.GeocodingResult
+	locationList  list.Model
+	location      openmeteo.GeocodingResult
+	weather       openmeteo.ForecastResponse
+	err           string
 }
 
 func (m Model) Init() tea.Cmd {
-	return GetDefaultForecast
+	return textinput.Blink
 }
-
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case openmeteo.ForecastResponse:
-		m.weather = openmeteo.ForecastResponse(msg)
-		m.status = statusLoaded
-		return m, tea.Quit
-
-	case error:
-		m.status = statusFailed
-		m.err = msg
-		return m, tea.Quit
-
 	case tea.KeyMsg:
-		if msg.Type == tea.KeyCtrlC {
+		if msg.Type == tea.KeyEnter {
+			if m.status == locationSearch {
+				m.status = locationLoading
+				return m, getLocationsCmd(m.locationInput.Value())
+			}
+
+			if m.status == locationPick {
+				picked, ok := m.locationList.SelectedItem().(LocationItem)
+				if ok {
+					m.location = picked.GeocodingResult
+					m.status = forecastLoading
+					return m, getForecastCmd(m.location.Latitude, m.location.Longitude)
+				}
+			}
+		}
+
+		if msg.Type == tea.KeyCtrlC || msg.String() == "q" {
 			return m, tea.Quit
 		}
+
+	case locationMsg:
+		if msg.failed {
+			m.err = "failed to find location"
+			m.status = locationFailed
+			return m, tea.Quit
+		}
+
+		if len(msg.locations) > 0 {
+			m.locations = msg.locations
+
+			// Create list items from locations
+			items := make([]list.Item, len(msg.locations))
+			for i, loc := range msg.locations {
+				items[i] = LocationItem{loc}
+			}
+			m.locationList.SetItems(items)
+
+			m.status = locationPick
+			return m, nil
+		}
+
+		m.location = msg.picked
+		m.status = forecastLoading
+		return m, getForecastCmd(m.location.Latitude, m.location.Longitude)
+
+	case forecastMsg:
+		if msg.failed {
+			m.err = "failed to get the weather forecast"
+			m.status = forecastFailed
+			return m, tea.Quit
+		}
+
+		m.status = forecastReady
+		m.weather = msg.forecast
+		return m, tea.Quit
 	}
 
-	return m, nil
+	var cmd tea.Cmd
+	if m.status == locationSearch {
+		m.locationInput, cmd = m.locationInput.Update(msg)
+	} else if m.status == locationPick {
+		m.locationList, cmd = m.locationList.Update(msg)
+	}
+
+	return m, cmd
 }
 
 func (m Model) View() string {
 	switch m.status {
-	case statusLoading:
-		return "\nGetting the weather ... (press q to quit)\n"
-	case statusFailed:
-		return fmt.Sprintf("\nFailed to get the weather: %v\n", m.err)
-	case statusLoaded:
-		forecast := m.weather
+	case locationSearch:
+		return "\nLocation search:\n" + m.locationInput.View()
+	case locationLoading:
+		return "\nLoading location ...\n"
+	case locationFailed:
+		return m.err
+	case locationPick:
+		return "\nPick a location:\n\n" + m.locationList.View()
+	case forecastLoading:
+		return "\nforecast loading ...\n"
+	case forecastFailed:
+		return m.err
+	case forecastReady:
+		weather := m.weather
 		s := ""
 
-		temperature := fmt.Sprintf("\nTemperature: %.1f %s", forecast.Current[string(openmeteo.Temperature2m)], forecast.CurrentUnits[string(openmeteo.Temperature2m)])
+		temperature := fmt.Sprintf("\nTemperature: %.1f %s", weather.Current[string(openmeteo.Temperature2m)], weather.CurrentUnits[string(openmeteo.Temperature2m)])
 		s += temperature
 
-		windSpeed := fmt.Sprintf("\nWind Speed: %.1f %s", forecast.Current[string(openmeteo.WindSpeed10m)], forecast.CurrentUnits[string(openmeteo.WindSpeed10m)])
+		windSpeed := fmt.Sprintf("\nWind Speed: %.1f %s", weather.Current[string(openmeteo.WindSpeed10m)], weather.CurrentUnits[string(openmeteo.WindSpeed10m)])
 		s += windSpeed
 
-		windDirection := fmt.Sprintf("\nWind Direction: %.1f %s", forecast.Current[string(openmeteo.WindDirection10m)], forecast.CurrentUnits[string(openmeteo.WindDirection10m)])
+		windDirection := fmt.Sprintf("\nWind Direction: %.1f %s", weather.Current[string(openmeteo.WindDirection10m)], weather.CurrentUnits[string(openmeteo.WindDirection10m)])
 		s += windDirection
 
-		windGusts := fmt.Sprintf("\nWind Gusts: %.1f %s", forecast.Current[string(openmeteo.WindGusts10m)], forecast.CurrentUnits[string(openmeteo.WindGusts10m)])
+		windGusts := fmt.Sprintf("\nWind Gusts: %.1f %s", weather.Current[string(openmeteo.WindGusts10m)], weather.CurrentUnits[string(openmeteo.WindGusts10m)])
 		s += windGusts
 
-		rain := fmt.Sprintf("\nRain: %.1f %s", forecast.Current[string(openmeteo.Rain)], forecast.CurrentUnits[string(openmeteo.Rain)])
+		rain := fmt.Sprintf("\nRain: %.1f %s", weather.Current[string(openmeteo.Rain)], weather.CurrentUnits[string(openmeteo.Rain)])
 		s += rain
 
-		showers := fmt.Sprintf("\nShowers: %.1f %s", forecast.Current[string(openmeteo.Showers)], forecast.CurrentUnits[string(openmeteo.Showers)])
+		showers := fmt.Sprintf("\nShowers: %.1f %s", weather.Current[string(openmeteo.Showers)], weather.CurrentUnits[string(openmeteo.Showers)])
 		s += showers
 
-		snowfall := fmt.Sprintf("\nSnowfall: %.1f %s", forecast.Current[string(openmeteo.Snowfall)], forecast.CurrentUnits[string(openmeteo.Snowfall)])
+		snowfall := fmt.Sprintf("\nSnowfall: %.1f %s", weather.Current[string(openmeteo.Snowfall)], weather.CurrentUnits[string(openmeteo.Snowfall)])
 		s += snowfall
 
-		cloudCover := fmt.Sprintf("\nCloud Cover: %.1f %s", forecast.Current[string(openmeteo.CloudCover)], forecast.CurrentUnits[string(openmeteo.CloudCover)])
+		cloudCover := fmt.Sprintf("\nCloud Cover: %.1f %s", weather.Current[string(openmeteo.CloudCover)], weather.CurrentUnits[string(openmeteo.CloudCover)])
 		s += cloudCover
 
-		seaLevelPressure := fmt.Sprintf("\nSea Level Pressure: %.1f %s", forecast.Current[string(openmeteo.SeaLevelPressure)], forecast.CurrentUnits[string(openmeteo.SeaLevelPressure)])
+		seaLevelPressure := fmt.Sprintf("\nSea Level Pressure: %.1f %s", weather.Current[string(openmeteo.SeaLevelPressure)], weather.CurrentUnits[string(openmeteo.SeaLevelPressure)])
 		s += seaLevelPressure
 
-		surfacePressure := fmt.Sprintf("\nSurface Pressure: %.1f %s", forecast.Current[string(openmeteo.SurfacePressure)], forecast.CurrentUnits[string(openmeteo.SurfacePressure)])
+		surfacePressure := fmt.Sprintf("\nSurface Pressure: %.1f %s", weather.Current[string(openmeteo.SurfacePressure)], weather.CurrentUnits[string(openmeteo.SurfacePressure)])
 		s += surfacePressure
 
-		pressureAtGround := fmt.Sprintf("\nPressure at Ground: %.1f %s", forecast.Current[string(openmeteo.PressureAtGround)], forecast.CurrentUnits[string(openmeteo.PressureAtGround)])
+		pressureAtGround := fmt.Sprintf("\nPressure at Ground: %.1f %s", weather.Current[string(openmeteo.PressureAtGround)], weather.CurrentUnits[string(openmeteo.PressureAtGround)])
 		s += pressureAtGround
 
 		return s
-	
+
 	default:
 		return ""
+	}
+}
+
+func InitialModel() Model {
+	locationInput := textinput.New()
+	locationInput.Placeholder = "Salinas"
+	locationInput.Focus()
+	locationInput.CharLimit = 256
+	locationInput.Width = 20
+
+	listDelegate := list.NewDefaultDelegate()
+	listDelegate.ShowDescription = false
+
+	locationList := list.New([]list.Item{}, listDelegate, 30, 14)
+	locationList.SetShowStatusBar(false)
+	locationList.SetFilteringEnabled(false)
+	locationList.SetShowHelp(false)
+	locationList.SetShowTitle(false)
+
+	return Model{
+		locationInput: locationInput,
+		locationList:  locationList,
+		status:        locationSearch,
 	}
 }
 
