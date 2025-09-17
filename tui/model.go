@@ -101,7 +101,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if msg.Type == tea.KeyCtrlC || msg.String() == "q" {
+		if msg.Type == tea.KeyCtrlC || (msg.String() == "q" && m.status != locationSearch) {
 			return m, tea.Quit
 		}
 
