@@ -38,24 +38,34 @@ const (
 	locationSearch = iota
 	locationLoading
 	locationPick
-	locationFailed
 
 	// forecast
 	forecastLoading
 	forecastReady
-	forecastFailed
+
+	failed
 )
 
 // ---- messages ----
-type locationMsg struct {
+
+type locationsFoundMsg struct {
 	locations []openmeteo.GeocodingResult
-	picked    openmeteo.GeocodingResult
-	failed    bool
 }
 
-type forecastMsg struct {
+type locationSelectedMsg struct {
+	location openmeteo.GeocodingResult
+}
+
+type locationErrorMsg struct {
+	err error
+}
+
+type forecastLoadedMsg struct {
 	forecast openmeteo.ForecastResponse
-	failed   bool
+}
+
+type forecastErrorMsg struct {
+	err error
 }
 
 // ---- model ----
@@ -86,9 +96,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.status == locationPick {
 				picked, ok := m.locationList.SelectedItem().(LocationItem)
 				if ok {
-					m.location = picked.GeocodingResult
-					m.status = forecastLoading
-					return m, getForecastCmd(m.location.Latitude, m.location.Longitude)
+					return m, selectLocationCmd(picked.GeocodingResult)
 				}
 			}
 		}
@@ -97,41 +105,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-	case locationMsg:
-		if msg.failed {
-			m.err = "failed to find location"
-			m.status = locationFailed
-			return m, tea.Quit
+	case locationsFoundMsg:
+		m.locations = msg.locations
+
+		// Auto-select single result
+		if len(msg.locations) == 1 {
+			m.location = msg.locations[0]
+			m.status = forecastLoading
+			return m, getForecastCmd(m.location.Latitude, m.location.Longitude)
 		}
 
-		if len(msg.locations) > 0 {
-			m.locations = msg.locations
-
-			// Create list items from locations
-			items := make([]list.Item, len(msg.locations))
-			for i, loc := range msg.locations {
-				items[i] = LocationItem{loc}
-			}
-			m.locationList.SetItems(items)
-
-			m.status = locationPick
-			return m, nil
+		// Show list for multiple results
+		items := make([]list.Item, len(msg.locations))
+		for i, loc := range msg.locations {
+			items[i] = LocationItem{loc}
 		}
+		m.locationList.SetItems(items)
+		m.status = locationPick
+		return m, nil
 
-		m.location = msg.picked
+	case locationSelectedMsg:
+		m.location = msg.location
 		m.status = forecastLoading
 		return m, getForecastCmd(m.location.Latitude, m.location.Longitude)
 
-	case forecastMsg:
-		if msg.failed {
-			m.err = "failed to get the weather forecast"
-			m.status = forecastFailed
-			return m, tea.Quit
-		}
+	case locationErrorMsg:
+		m.err = "Failed to find location: " + msg.err.Error()
+		m.status = failed
+		return m, nil
 
-		m.status = forecastReady
+	case forecastLoadedMsg:
 		m.weather = msg.forecast
+		m.status = forecastReady
 		return m, tea.Quit
+
+	case forecastErrorMsg:
+		m.err = "Failed to get forecast: " + msg.err.Error()
+		m.status = failed
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -146,18 +157,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	switch m.status {
+	case failed:
+		return "\n" + m.err + "\n\nPress 'q' to quit."
 	case locationSearch:
 		return "\nLocation search:\n" + m.locationInput.View()
 	case locationLoading:
 		return "\nLoading location ...\n"
-	case locationFailed:
-		return m.err
 	case locationPick:
 		return "\nPick a location:\n\n" + m.locationList.View()
 	case forecastLoading:
 		return "\nforecast loading ...\n"
-	case forecastFailed:
-		return m.err
 	case forecastReady:
 		weather := m.weather
 		s := ""
@@ -224,4 +233,3 @@ func InitialModel() Model {
 		status:        locationSearch,
 	}
 }
-

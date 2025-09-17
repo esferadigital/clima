@@ -10,21 +10,26 @@ const DEFAULT_SEARCH_COUNT = 10
 func getLocationsCmd(name string) tea.Cmd {
 	return func() tea.Msg {
 		params := openmeteo.GeocodingParams{
-			Name: name,
+			Name:  name,
 			Count: DEFAULT_SEARCH_COUNT,
 		}
 
 		res, err := openmeteo.SearchLocation(params)
 		if err != nil {
-			return locationMsg {
-				failed: true,
+			return locationErrorMsg{
+				err: err,
 			}
 		}
 
-		return locationMsg{
-			locations: res.Results,	
-			failed: false,
+		return locationsFoundMsg{
+			locations: res.Results,
 		}
+	}
+}
+
+func selectLocationCmd(selected openmeteo.GeocodingResult) tea.Cmd {
+	return func() tea.Msg {
+		return locationSelectedMsg{location: selected}
 	}
 }
 
@@ -54,15 +59,13 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 
 		res, err := openmeteo.GetForecast(params)
 		if err != nil {
-			return forecastMsg{
-				failed: true,
+			return forecastErrorMsg{
+				err: err,
 			}
 		}
 
-		return forecastMsg{
+		return forecastLoadedMsg{
 			forecast: res,
-			failed: false,
 		}
 	}
 }
-
