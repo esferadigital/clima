@@ -34,7 +34,6 @@ const GEOCODING_API_URL = "https://geocoding-api.open-meteo.com/v1/search"
 // Data is provided by the Open-Meteo API.
 func SearchLocation(params GeocodingParams) (GeocodingResponse, error) {
 	url := fmt.Sprintf("%s?name=%s&count=%d", GEOCODING_API_URL, params.Name, params.Count)
-
 	resp, err := http.Get(url)
 	if err != nil {
 		return GeocodingResponse{}, err
@@ -49,7 +48,6 @@ func SearchLocation(params GeocodingParams) (GeocodingResponse, error) {
 	var response GeocodingResponse
 	err = decoder.Decode(&response)
 	if err != nil {
-		fmt.Println("Error decoding response:", err)
 		return GeocodingResponse{}, err
 	}
 
