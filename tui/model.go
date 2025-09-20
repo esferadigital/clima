@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/esferadigital/clima/openmeteo"
@@ -72,14 +73,16 @@ type forecastErrorMsg struct {
 // ---- model ----
 
 type Model struct {
-	sink          io.Writer
-	status        ModelStatus
-	locationInput textinput.Model
-	locations     []openmeteo.GeocodingResult
-	locationList  list.Model
-	location      openmeteo.GeocodingResult
-	weather       openmeteo.ForecastResponse
-	err           string
+	sink            io.Writer
+	status          ModelStatus
+	locationSpinner spinner.Model
+	forecastSpinner spinner.Model
+	locationInput   textinput.Model
+	locations       []openmeteo.GeocodingResult
+	locationList    list.Model
+	location        openmeteo.GeocodingResult
+	weather         openmeteo.ForecastResponse
+	err             string
 }
 
 func (m Model) Init() tea.Cmd {
@@ -96,7 +99,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Type == tea.KeyEnter {
 			if m.status == locationSearch {
 				m.status = locationLoading
-				return m, getLocationsCmd(m.locationInput.Value())
+				return m, tea.Batch(getLocationsCmd(m.locationInput.Value()), m.locationSpinner.Tick)
 			}
 
 			if m.status == locationPick {
@@ -118,7 +121,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(msg.locations) == 1 {
 			m.location = msg.locations[0]
 			m.status = forecastLoading
-			return m, getForecastCmd(m.location.Latitude, m.location.Longitude)
+			return m, tea.Batch(getForecastCmd(m.location.Latitude, m.location.Longitude), m.forecastSpinner.Tick)
 		}
 
 		// Show list for multiple results
@@ -133,7 +136,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case locationSelectedMsg:
 		m.location = msg.location
 		m.status = forecastLoading
-		return m, getForecastCmd(m.location.Latitude, m.location.Longitude)
+		return m, tea.Batch(getForecastCmd(m.location.Latitude, m.location.Longitude), m.forecastSpinner.Tick)
 
 	case locationErrorMsg:
 		m.err = "Failed to find location: " + msg.err.Error()
@@ -155,8 +158,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.status {
 	case locationSearch:
 		m.locationInput, cmd = m.locationInput.Update(msg)
+	case locationLoading:
+		m.locationSpinner, cmd = m.locationSpinner.Update(msg)
 	case locationPick:
 		m.locationList, cmd = m.locationList.Update(msg)
+	case forecastLoading:
+		m.forecastSpinner, cmd = m.forecastSpinner.Update(msg)
 	}
 
 	return m, cmd
@@ -169,11 +176,11 @@ func (m Model) View() string {
 	case locationSearch:
 		return "\nLocation search:\n" + m.locationInput.View()
 	case locationLoading:
-		return "\nLoading location ...\n"
+		return fmt.Sprintf("\nFinding location%s\n", m.locationSpinner.View())
 	case locationPick:
 		return "\nPick a location:\n\n" + m.locationList.View()
 	case forecastLoading:
-		return "\nforecast loading ...\n"
+		return fmt.Sprintf("\nLoading forecast%s\n", m.forecastSpinner.View())
 	case forecastReady:
 		weather := m.weather
 		s := ""
@@ -225,6 +232,12 @@ func (m Model) View() string {
 }
 
 func InitialModel(sink io.Writer) Model {
+	locationSpin := spinner.New()
+	locationSpin.Spinner = spinner.Ellipsis
+
+	forecastSpin := spinner.New()
+	forecastSpin.Spinner = spinner.Ellipsis
+
 	locationInput := textinput.New()
 	locationInput.Placeholder = "Salinas"
 	locationInput.Focus()
@@ -241,10 +254,12 @@ func InitialModel(sink io.Writer) Model {
 	locationList.SetShowTitle(false)
 
 	return Model{
-		sink:          sink,
-		locationInput: locationInput,
-		locationList:  locationList,
-		status:        locationSearch,
+		sink:            sink,
+		locationSpinner: locationSpin,
+		forecastSpinner: forecastSpin,
+		locationInput:   locationInput,
+		locationList:    locationList,
+		status:          locationSearch,
 	}
 }
 
