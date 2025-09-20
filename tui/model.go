@@ -178,6 +178,12 @@ func (m Model) View() string {
 		weather := m.weather
 		s := ""
 
+		weatherCode, ok := weather.Current[string(openmeteo.WeatherCode)].(float64)
+		if ok {
+			weatherInterpretation := fmt.Sprintf("\n%s", openmeteo.MapWeatherCode(weatherCode))
+			s += weatherInterpretation
+		}
+
 		temperature := fmt.Sprintf("\nTemperature: %.1f %s", weather.Current[string(openmeteo.Temperature2m)], weather.CurrentUnits[string(openmeteo.Temperature2m)])
 		s += temperature
 
@@ -241,3 +247,4 @@ func InitialModel(sink io.Writer) Model {
 		status:        locationSearch,
 	}
 }
+
