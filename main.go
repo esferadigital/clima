@@ -10,25 +10,31 @@ import (
 	"github.com/esferadigital/clima/tui"
 )
 
+const DEBUG_PATH = "dev/debug.log"
+
 func main() {
-	debug := flag.Bool("debug", false, "dump logs to file")
+	var (
+		sink *os.File
+		err  error
+	)
+
+	debug := flag.Bool("debug", false, "Save logs to file")
 	flag.Parse()
+
 	if *debug {
-		debugPath := "dev/debug.log"
-		if err := os.MkdirAll(filepath.Dir(debugPath), os.ModePerm); err != nil {
-			fmt.Printf("Failed to ensure debug directory exists: %v\n", err)
+		if err = os.MkdirAll(filepath.Dir(DEBUG_PATH), os.ModePerm); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to ensure debug directory exists: %v\n", err)
 			os.Exit(1)
 		}
-		if logFile, err := tea.LogToFile("dev/debug.log", "debug"); err != nil {
-			fmt.Printf("Failed to set up debug log file: %v\n", err)
+		if sink, err = os.OpenFile(DEBUG_PATH, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to open debug log file: %v\n", err)
 			os.Exit(1)
-		} else {
-			defer logFile.Close()
 		}
+		defer sink.Close()
 	}
 
-	if _, err := tea.NewProgram(tui.InitialModel()).Run(); err != nil {
-		fmt.Printf("Uh oh, there was an error: %v\n", err)
+	if _, err = tea.NewProgram(tui.InitialModel(sink)).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "TUI program run failed: %v\n", err)
 		os.Exit(1)
 	}
 }

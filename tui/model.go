@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"log"
+	"io"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -72,6 +72,7 @@ type forecastErrorMsg struct {
 // ---- model ----
 
 type Model struct {
+	sink          io.Writer
 	status        ModelStatus
 	locationInput textinput.Model
 	locations     []openmeteo.GeocodingResult
@@ -86,7 +87,9 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	log.Printf("%v", msg)
+	if m.sink != nil {
+		fmt.Fprintf(m.sink, "[MSG] %T: %+v\n", msg, msg)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -149,9 +152,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	if m.status == locationSearch {
+	switch m.status {
+	case locationSearch:
 		m.locationInput, cmd = m.locationInput.Update(msg)
-	} else if m.status == locationPick {
+	case locationPick:
 		m.locationList, cmd = m.locationList.Update(msg)
 	}
 
@@ -214,7 +218,7 @@ func (m Model) View() string {
 	}
 }
 
-func InitialModel() Model {
+func InitialModel(sink io.Writer) Model {
 	locationInput := textinput.New()
 	locationInput.Placeholder = "Salinas"
 	locationInput.Focus()
@@ -231,9 +235,9 @@ func InitialModel() Model {
 	locationList.SetShowTitle(false)
 
 	return Model{
+		sink:          sink,
 		locationInput: locationInput,
 		locationList:  locationList,
 		status:        locationSearch,
 	}
 }
-

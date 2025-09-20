@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"log"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/esferadigital/clima/openmeteo"
 )
@@ -18,7 +16,6 @@ func getLocationsCmd(name string) tea.Cmd {
 
 		res, err := openmeteo.SearchLocation(params)
 		if err != nil {
-			log.Print(err)
 			return locationErrorMsg{
 				err: err,
 			}
@@ -62,7 +59,6 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 
 		res, err := openmeteo.GetForecast(params)
 		if err != nil {
-			log.Print(err)
 			return forecastErrorMsg{
 				err: err,
 			}
@@ -73,4 +69,3 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 		}
 	}
 }
-
