@@ -8,7 +8,15 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/esferadigital/clima/openmeteo"
+)
+
+var (
+	accent = lipgloss.NewStyle().Foreground(lipgloss.Color("13"))
+	subtle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+
+	label = lipgloss.NewStyle().Width(20).Foreground(lipgloss.Color("8"))
 )
 
 // LocationItem wraps GeocodingResult to implement list.Item interface
@@ -183,48 +191,39 @@ func (m Model) View() string {
 		return fmt.Sprintf("\nLoading forecast%s\n", m.forecastSpinner.View())
 	case forecastReady:
 		weather := m.weather
-		s := ""
+		s := fmt.Sprintf("\n%s, %s", m.location.Name, m.location.Country)
 
 		weatherCode, ok := weather.Current[string(openmeteo.WeatherCode)].(float64)
 		if ok {
 			weatherInterpretation := fmt.Sprintf("\n%s", openmeteo.MapWeatherCode(weatherCode))
-			s += weatherInterpretation
+			s += accent.Render(weatherInterpretation)
 		}
 
-		temperature := fmt.Sprintf("\nTemperature: %.1f %s", weather.Current[string(openmeteo.Temperature2m)], weather.CurrentUnits[string(openmeteo.Temperature2m)])
+		temperature := fmt.Sprintf("\n%.1f %s", weather.Current[string(openmeteo.Temperature2m)], weather.CurrentUnits[string(openmeteo.Temperature2m)])
+		temperature = temperature + subtle.Render(fmt.Sprintf(" (feels like %.1f %s)", weather.Current[string(openmeteo.ApparentTemperature)], weather.CurrentUnits[string(openmeteo.ApparentTemperature)]))
 		s += temperature
 
-		windSpeed := fmt.Sprintf("\nWind Speed: %.1f %s", weather.Current[string(openmeteo.WindSpeed10m)], weather.CurrentUnits[string(openmeteo.WindSpeed10m)])
-		s += windSpeed
+		windLabel := label.Render("\n\nWind")
+		windValue := fmt.Sprintf("%.1f %s @ %.1f %s", weather.Current[string(openmeteo.WindSpeed10m)], weather.CurrentUnits[string(openmeteo.WindSpeed10m)], weather.Current[string(openmeteo.WindDirection10m)], weather.CurrentUnits[string(openmeteo.WindDirection10m)])
+		s += windLabel + windValue
 
-		windDirection := fmt.Sprintf("\nWind Direction: %.1f %s", weather.Current[string(openmeteo.WindDirection10m)], weather.CurrentUnits[string(openmeteo.WindDirection10m)])
-		s += windDirection
+		windGustsLabel := label.Render("\nWind gusts")
+		windGustsValue := fmt.Sprintf("%.1f %s", weather.Current[string(openmeteo.WindGusts10m)], weather.CurrentUnits[string(openmeteo.WindGusts10m)])
+		s += windGustsLabel + windGustsValue
 
-		windGusts := fmt.Sprintf("\nWind Gusts: %.1f %s", weather.Current[string(openmeteo.WindGusts10m)], weather.CurrentUnits[string(openmeteo.WindGusts10m)])
-		s += windGusts
+		humidityLabel := label.Render("\nHumidity")
+		humidityValue := fmt.Sprintf("%.1f %s", weather.Current[string(openmeteo.RelativeHumidity2m)], weather.CurrentUnits[string(openmeteo.RelativeHumidity2m)])
+		s += humidityLabel + humidityValue
 
-		rain := fmt.Sprintf("\nRain: %.1f %s", weather.Current[string(openmeteo.Rain)], weather.CurrentUnits[string(openmeteo.Rain)])
-		s += rain
+		precipitationLabel := label.Render("\nPrecipitation")
+		precipitationValue := fmt.Sprintf("%.1f %s", weather.Current[string(openmeteo.Precipitation)], weather.CurrentUnits[string(openmeteo.Precipitation)])
+		s += precipitationLabel + precipitationValue
 
-		showers := fmt.Sprintf("\nShowers: %.1f %s", weather.Current[string(openmeteo.Showers)], weather.CurrentUnits[string(openmeteo.Showers)])
-		s += showers
+		pressureLabel := label.Render("\nPressure")
+		pressureValue := fmt.Sprintf("%.1f %s", weather.Current[string(openmeteo.SeaLevelPressure)], weather.CurrentUnits[string(openmeteo.SeaLevelPressure)])
+		s += pressureLabel + pressureValue
 
-		snowfall := fmt.Sprintf("\nSnowfall: %.1f %s", weather.Current[string(openmeteo.Snowfall)], weather.CurrentUnits[string(openmeteo.Snowfall)])
-		s += snowfall
-
-		cloudCover := fmt.Sprintf("\nCloud Cover: %.1f %s", weather.Current[string(openmeteo.CloudCover)], weather.CurrentUnits[string(openmeteo.CloudCover)])
-		s += cloudCover
-
-		seaLevelPressure := fmt.Sprintf("\nSea Level Pressure: %.1f %s", weather.Current[string(openmeteo.SeaLevelPressure)], weather.CurrentUnits[string(openmeteo.SeaLevelPressure)])
-		s += seaLevelPressure
-
-		surfacePressure := fmt.Sprintf("\nSurface Pressure: %.1f %s", weather.Current[string(openmeteo.SurfacePressure)], weather.CurrentUnits[string(openmeteo.SurfacePressure)])
-		s += surfacePressure
-
-		pressureAtGround := fmt.Sprintf("\nPressure at Ground: %.1f %s", weather.Current[string(openmeteo.PressureAtGround)], weather.CurrentUnits[string(openmeteo.PressureAtGround)])
-		s += pressureAtGround
-
-		return s
+		return s + "\n"
 
 	default:
 		return ""
@@ -234,15 +233,18 @@ func (m Model) View() string {
 func InitialModel(sink io.Writer) Model {
 	locationSpin := spinner.New()
 	locationSpin.Spinner = spinner.Ellipsis
+	locationSpin.Style = accent
 
 	forecastSpin := spinner.New()
 	forecastSpin.Spinner = spinner.Ellipsis
+	forecastSpin.Style = accent
 
 	locationInput := textinput.New()
 	locationInput.Placeholder = "Salinas"
 	locationInput.Focus()
 	locationInput.CharLimit = 256
 	locationInput.Width = 20
+	locationInput.Cursor.Style = accent
 
 	listDelegate := list.NewDefaultDelegate()
 	listDelegate.ShowDescription = false
@@ -250,7 +252,7 @@ func InitialModel(sink io.Writer) Model {
 	locationList := list.New([]list.Item{}, listDelegate, 30, 14)
 	locationList.SetShowStatusBar(false)
 	locationList.SetFilteringEnabled(false)
-	locationList.SetShowHelp(false)
+	locationList.SetShowHelp(true)
 	locationList.SetShowTitle(false)
 
 	return Model{

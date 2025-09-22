@@ -5,6 +5,8 @@ import (
 	"github.com/esferadigital/clima/openmeteo"
 )
 
+// ---- commands ----
+
 const DEFAULT_SEARCH_COUNT = 10
 
 func getLocationsCmd(name string) tea.Cmd {
@@ -40,20 +42,15 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 			Longitude: long,
 			Current: []openmeteo.CurrentWeatherVariables{
 				openmeteo.Temperature2m,
-				openmeteo.RelativeHumidity2m,
 				openmeteo.ApparentTemperature,
+				openmeteo.RelativeHumidity2m,
 				openmeteo.IsDay,
 				openmeteo.WeatherCode,
 				openmeteo.WindSpeed10m,
 				openmeteo.WindDirection10m,
 				openmeteo.WindGusts10m,
-				openmeteo.Rain,
-				openmeteo.Showers,
-				openmeteo.Snowfall,
-				openmeteo.CloudCover,
+				openmeteo.Precipitation,
 				openmeteo.SeaLevelPressure,
-				openmeteo.SurfacePressure,
-				openmeteo.PressureAtGround,
 			},
 		}
 
