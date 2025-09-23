@@ -9,7 +9,29 @@ import (
 
 const DEFAULT_SEARCH_COUNT = 10
 
-func getLocationsCmd(name string) tea.Cmd {
+func getLocationsCmd() tea.Cmd {
+	return func() tea.Msg {
+		locations, err := loadRecentLocations()
+		if err != nil {
+			return recentLocationsLoadedMsg{
+				locations: []openmeteo.GeocodingResult{},
+			}
+		}
+
+		return recentLocationsLoadedMsg{
+			locations: locations,
+		}
+	}
+}
+
+func saveRecentLocationCmd(location openmeteo.GeocodingResult) tea.Cmd {
+	return func() tea.Msg {
+		err := addRecentLocation(location)
+		return recentLocationSavedMsg{err: err}
+	}
+}
+
+func searchLocationsCmd(name string) tea.Cmd {
 	return func() tea.Msg {
 		params := openmeteo.GeocodingParams{
 			Name:  name,
@@ -71,4 +93,3 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 		}
 	}
 }
-

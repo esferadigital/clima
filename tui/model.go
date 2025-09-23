@@ -44,8 +44,11 @@ func (l LocationItem) Description() string {
 type ModelStatus int
 
 const (
+	// recent locations
+	recentLocations = iota
+
 	// search location
-	locationSearch = iota
+	locationSearch
 	locationLoading
 	locationPick
 
@@ -57,6 +60,14 @@ const (
 )
 
 // ---- messages ----
+
+type recentLocationsLoadedMsg struct {
+	locations []openmeteo.GeocodingResult
+}
+
+type recentLocationSavedMsg struct {
+	err error
+}
 
 type locationsFoundMsg struct {
 	locations []openmeteo.GeocodingResult
@@ -88,13 +99,14 @@ type Model struct {
 	locationInput   textinput.Model
 	locations       []openmeteo.GeocodingResult
 	locationList    list.Model
+	recentList      list.Model
 	location        openmeteo.GeocodingResult
 	weather         openmeteo.ForecastResponse
 	err             string
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return getLocationsCmd()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -105,9 +117,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyEnter {
+			if m.status == recentLocations {
+				picked, ok := m.recentList.SelectedItem().(LocationItem)
+				if ok {
+					return m, selectLocationCmd(picked.GeocodingResult)
+				}
+			}
+
 			if m.status == locationSearch {
 				m.status = locationLoading
-				return m, tea.Batch(getLocationsCmd(m.locationInput.Value()), m.locationSpinner.Tick)
+				return m, tea.Batch(searchLocationsCmd(m.locationInput.Value()), m.locationSpinner.Tick)
 			}
 
 			if m.status == locationPick {
@@ -118,9 +137,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if msg.String() == "n" && m.status == recentLocations {
+			m.status = locationSearch
+			return m, textinput.Blink
+		}
+
 		if msg.Type == tea.KeyCtrlC || (msg.String() == "q" && m.status != locationSearch) {
 			return m, tea.Quit
 		}
+
+	case recentLocationsLoadedMsg:
+		if len(msg.locations) == 0 {
+			m.status = locationSearch
+			return m, textinput.Blink
+		}
+
+		items := make([]list.Item, len(msg.locations))
+		for i, loc := range msg.locations {
+			items[i] = LocationItem{loc}
+		}
+		m.recentList.SetItems(items)
+		m.status = recentLocations
+		return m, nil
 
 	case locationsFoundMsg:
 		m.locations = msg.locations
@@ -144,7 +182,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case locationSelectedMsg:
 		m.location = msg.location
 		m.status = forecastLoading
-		return m, tea.Batch(getForecastCmd(m.location.Latitude, m.location.Longitude), m.forecastSpinner.Tick)
+		return m, tea.Batch(
+			getForecastCmd(m.location.Latitude, m.location.Longitude),
+			saveRecentLocationCmd(msg.location),
+			m.forecastSpinner.Tick,
+		)
+
+	case recentLocationSavedMsg:
+		// Ignore save errors to not block UI
+		return m, nil
 
 	case locationErrorMsg:
 		m.err = "Failed to find location: " + msg.err.Error()
@@ -164,6 +210,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	switch m.status {
+	case recentLocations:
+		m.recentList, cmd = m.recentList.Update(msg)
 	case locationSearch:
 		m.locationInput, cmd = m.locationInput.Update(msg)
 	case locationLoading:
@@ -181,6 +229,8 @@ func (m Model) View() string {
 	switch m.status {
 	case failed:
 		return "\n" + m.err + "\n\nPress 'q' to quit."
+	case recentLocations:
+		return "\nRecent locations:\n\n" + m.recentList.View()
 	case locationSearch:
 		return "\nLocation search:\n" + m.locationInput.View()
 	case locationLoading:
@@ -294,12 +344,19 @@ func InitialModel(sink io.Writer) Model {
 	locationList.SetShowHelp(true)
 	locationList.SetShowTitle(false)
 
+	recentList := list.New([]list.Item{}, listDelegate, 30, 14)
+	recentList.SetShowStatusBar(false)
+	recentList.SetFilteringEnabled(false)
+	recentList.SetShowHelp(true)
+	recentList.SetShowTitle(false)
+
 	return Model{
 		sink:            sink,
 		locationSpinner: locationSpin,
 		forecastSpinner: forecastSpin,
 		locationInput:   locationInput,
 		locationList:    locationList,
-		status:          locationSearch,
+		recentList:      recentList,
+		status:          recentLocations,
 	}
 }
