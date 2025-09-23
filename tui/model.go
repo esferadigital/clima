@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -89,6 +91,42 @@ type forecastErrorMsg struct {
 	err error
 }
 
+// ---- keymap ----
+
+type keyMap struct {
+	newSearch       key.Binding
+	recentLocations key.Binding
+	quit            key.Binding
+}
+
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.newSearch, k.recentLocations, k.quit}
+}
+
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.newSearch, k.recentLocations},
+		{k.quit},
+	}
+}
+
+func newKeyMap() keyMap {
+	return keyMap{
+		newSearch: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "new search"),
+		),
+		recentLocations: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "recent locations"),
+		),
+		quit: key.NewBinding(
+			key.WithKeys("q"),
+			key.WithHelp("q", "quit"),
+		),
+	}
+}
+
 // ---- model ----
 
 type Model struct {
@@ -103,6 +141,8 @@ type Model struct {
 	location        openmeteo.GeocodingResult
 	weather         openmeteo.ForecastResponse
 	err             string
+	keys            keyMap
+	help            help.Model
 }
 
 func (m Model) Init() tea.Cmd {
@@ -115,6 +155,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.help.Width = msg.Width
+
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyEnter {
 			if m.status == recentLocations {
@@ -137,12 +180,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if msg.String() == "n" && m.status == recentLocations {
+		if key.Matches(msg, m.keys.newSearch) && (m.status == recentLocations || m.status == locationPick || m.status == forecastReady) {
 			m.status = locationSearch
 			return m, textinput.Blink
 		}
 
-		if msg.Type == tea.KeyCtrlC || (msg.String() == "q" && m.status != locationSearch) {
+		if key.Matches(msg, m.keys.recentLocations) && m.status == forecastReady {
+			m.status = recentLocations
+			return m, getLocationsCmd()
+		}
+
+		if msg.Type == tea.KeyCtrlC || key.Matches(msg, m.keys.quit) || (msg.String() == "q" && m.status != locationSearch) {
 			return m, tea.Quit
 		}
 
@@ -200,7 +248,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case forecastLoadedMsg:
 		m.weather = msg.forecast
 		m.status = forecastReady
-		return m, tea.Quit
+		return m, nil
 
 	case forecastErrorMsg:
 		m.err = "Failed to get forecast: " + msg.err.Error()
@@ -312,7 +360,8 @@ func (m Model) View() string {
 		}
 		s += uvLabel + uvValue
 
-		return s + "\n"
+		helpView := m.help.View(m.keys)
+		return s + "\n\n" + helpView
 
 	default:
 		return ""
@@ -338,17 +387,29 @@ func InitialModel(sink io.Writer) Model {
 	listDelegate := list.NewDefaultDelegate()
 	listDelegate.ShowDescription = false
 
+	keys := newKeyMap()
+
 	locationList := list.New([]list.Item{}, listDelegate, 30, 14)
 	locationList.SetShowStatusBar(false)
 	locationList.SetFilteringEnabled(false)
 	locationList.SetShowHelp(true)
 	locationList.SetShowTitle(false)
+	locationList.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			keys.newSearch,
+		}
+	}
 
 	recentList := list.New([]list.Item{}, listDelegate, 30, 14)
 	recentList.SetShowStatusBar(false)
 	recentList.SetFilteringEnabled(false)
 	recentList.SetShowHelp(true)
 	recentList.SetShowTitle(false)
+	recentList.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			keys.newSearch,
+		}
+	}
 
 	return Model{
 		sink:            sink,
@@ -358,5 +419,7 @@ func InitialModel(sink io.Writer) Model {
 		locationList:    locationList,
 		recentList:      recentList,
 		status:          recentLocations,
+		keys:            keys,
+		help:            help.New(),
 	}
 }
