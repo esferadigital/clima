@@ -96,17 +96,18 @@ type forecastErrorMsg struct {
 type keyMap struct {
 	newSearch       key.Binding
 	recentLocations key.Binding
+	refresh         key.Binding
 	quit            key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.newSearch, k.recentLocations, k.quit}
+	return []key.Binding{k.newSearch, k.recentLocations, k.refresh, k.quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.newSearch, k.recentLocations},
-		{k.quit},
+		{k.refresh, k.quit},
 	}
 }
 
@@ -117,8 +118,12 @@ func newKeyMap() keyMap {
 			key.WithHelp("n", "new search"),
 		),
 		recentLocations: key.NewBinding(
+			key.WithKeys("b"),
+			key.WithHelp("b", "recent locations"),
+		),
+		refresh: key.NewBinding(
 			key.WithKeys("r"),
-			key.WithHelp("r", "recent locations"),
+			key.WithHelp("r", "refresh"),
 		),
 		quit: key.NewBinding(
 			key.WithKeys("q"),
@@ -188,6 +193,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.recentLocations) && m.status == forecastReady {
 			m.status = recentLocations
 			return m, getLocationsCmd()
+		}
+
+		if key.Matches(msg, m.keys.refresh) && m.status == forecastReady {
+			m.status = forecastLoading
+			return m, tea.Batch(getForecastCmd(m.location.Latitude, m.location.Longitude), m.forecastSpinner.Tick)
 		}
 
 		if msg.Type == tea.KeyCtrlC || key.Matches(msg, m.keys.quit) || (msg.String() == "q" && m.status != locationSearch) {
