@@ -52,6 +52,11 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 				openmeteo.Precipitation,
 				openmeteo.SeaLevelPressure,
 			},
+			Daily: []openmeteo.DailyWeatherVariables{
+				openmeteo.Temperature2mMin,
+				openmeteo.Temperature2mMax,
+				openmeteo.UVIndexMax,
+			},
 		}
 
 		res, err := openmeteo.GetForecast(params)
@@ -66,4 +71,3 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 		}
 	}
 }
-

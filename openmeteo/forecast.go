@@ -14,6 +14,7 @@ type ForecastParams struct {
 	Latitude  float64
 	Longitude float64
 	Current   []CurrentWeatherVariables
+	Daily     []DailyWeatherVariables
 }
 
 // Response from the Open-Meteo Forecast V1 API.
@@ -30,9 +31,11 @@ type ForecastResponse struct {
 	TimezoneAbbrev   string         `json:"timezone_abbreviation"`
 	CurrentUnits     map[string]any `json:"current_units"`
 	Current          map[string]any `json:"current"`
+	DailyUnits       map[string]any `json:"daily_units"`
+	Daily            map[string]any `json:"daily"`
 }
 
-// Variables available to request from the Open-Meteo Forecast V1 API.
+// Variables available to request from the Open-Meteo Forecast V1 API for current weather.
 type CurrentWeatherVariables string
 
 const (
@@ -53,9 +56,18 @@ const (
 	WindGusts10m        CurrentWeatherVariables = "wind_gusts_10m"
 )
 
+// Variables available to request from the Open-Meteo Forecast V1 API for daily weather.
+type DailyWeatherVariables string
+
+const (
+	Temperature2mMin DailyWeatherVariables = "temperature_2m_min"
+	Temperature2mMax DailyWeatherVariables = "temperature_2m_max"
+	UVIndexMax       DailyWeatherVariables = "uv_index_max"
+)
+
 // Compose a comma-separated string of variable names.
 // This is used to send the variables as a query parameter.
-func writeVariableCSV(variables []CurrentWeatherVariables) string {
+func writeVariableCSV[T ~string](variables []T) string {
 	variableNames := make([]string, len(variables))
 	for i, variable := range variables {
 		variableNames[i] = string(variable)
@@ -68,18 +80,24 @@ const FORECAST_API_URL = "https://api.open-meteo.com/v1/forecast"
 // Retrieve the current forecast data for a given location and parameters.
 // Data is provided by the Open-Meteo API.
 func GetForecast(params ForecastParams) (ForecastResponse, error) {
-	variables := writeVariableCSV(params.Current)
-	url := fmt.Sprintf("%s?latitude=%f&longitude=%f&current=%s", FORECAST_API_URL, params.Latitude, params.Longitude, variables)
+	url := fmt.Sprintf("%s?latitude=%f&longitude=%f", FORECAST_API_URL, params.Latitude, params.Longitude)
+	if len(params.Current) > 0 {
+		currentVars := writeVariableCSV(params.Current)
+		url += fmt.Sprintf("&current=%s", currentVars)
+	}
+	if len(params.Daily) > 0 {
+		dailyVars := writeVariableCSV(params.Daily)
+		url += fmt.Sprintf("&daily=%s", dailyVars)
+	}
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return ForecastResponse{}, err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return ForecastResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
-
 	decoder := json.NewDecoder(resp.Body)
 	var response ForecastResponse
 	err = decoder.Decode(&response)
@@ -124,4 +142,3 @@ func MapWeatherCode(code float64) string {
 
 	return wmoCodes[code]
 }
-

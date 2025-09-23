@@ -203,6 +203,32 @@ func (m Model) View() string {
 		temperature = temperature + subtle.Render(fmt.Sprintf(" (feels like %.1f %s)", weather.Current[string(openmeteo.ApparentTemperature)], weather.CurrentUnits[string(openmeteo.ApparentTemperature)]))
 		s += temperature
 
+		minTempLabel := label.Render("\nMin")
+		var minTempValue string
+		if minArray, ok := weather.Daily[string(openmeteo.Temperature2mMin)].([]any); ok && len(minArray) > 0 {
+			if minTemp, ok := minArray[0].(float64); ok {
+				minTempValue = fmt.Sprintf("%.1f %s", minTemp, weather.DailyUnits[string(openmeteo.Temperature2mMin)])
+			} else {
+				minTempValue = "N/A"
+			}
+		} else {
+			minTempValue = "N/A"
+		}
+		s += minTempLabel + minTempValue
+
+		maxTempLabel := label.Render("\nMax")
+		var maxTempValue string
+		if maxArray, ok := weather.Daily[string(openmeteo.Temperature2mMax)].([]any); ok && len(maxArray) > 0 {
+			if maxTemp, ok := maxArray[0].(float64); ok {
+				maxTempValue = fmt.Sprintf("%.1f %s", maxTemp, weather.DailyUnits[string(openmeteo.Temperature2mMax)])
+			} else {
+				maxTempValue = "N/A"
+			}
+		} else {
+			maxTempValue = "N/A"
+		}
+		s += maxTempLabel + maxTempValue
+
 		windLabel := label.Render("\n\nWind")
 		windValue := fmt.Sprintf("%.1f %s @ %.1f %s", weather.Current[string(openmeteo.WindSpeed10m)], weather.CurrentUnits[string(openmeteo.WindSpeed10m)], weather.Current[string(openmeteo.WindDirection10m)], weather.CurrentUnits[string(openmeteo.WindDirection10m)])
 		s += windLabel + windValue
@@ -222,6 +248,19 @@ func (m Model) View() string {
 		pressureLabel := label.Render("\nPressure")
 		pressureValue := fmt.Sprintf("%.1f %s", weather.Current[string(openmeteo.SeaLevelPressure)], weather.CurrentUnits[string(openmeteo.SeaLevelPressure)])
 		s += pressureLabel + pressureValue
+
+		uvLabel := label.Render("\nUV index")
+		var uvValue string
+		if uvArray, ok := weather.Daily[string(openmeteo.UVIndexMax)].([]any); ok && len(uvArray) > 0 {
+			if uvToday, ok := uvArray[0].(float64); ok {
+				uvValue = fmt.Sprintf("%.1f", uvToday)
+			} else {
+				uvValue = "-"
+			}
+		} else {
+			uvValue = "-"
+		}
+		s += uvLabel + uvValue
 
 		return s + "\n"
 
@@ -264,4 +303,3 @@ func InitialModel(sink io.Writer) Model {
 		status:          locationSearch,
 	}
 }
-
