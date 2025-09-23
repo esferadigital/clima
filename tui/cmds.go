@@ -71,3 +71,4 @@ func getForecastCmd(lat float64, long float64) tea.Cmd {
 		}
 	}
 }
+
