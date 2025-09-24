@@ -200,7 +200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(getForecastCmd(m.location.Latitude, m.location.Longitude), m.forecastSpinner.Tick)
 		}
 
-		if msg.Type == tea.KeyCtrlC || key.Matches(msg, m.keys.quit) || (msg.String() == "q" && m.status != locationSearch) {
+		if msg.Type == tea.KeyCtrlC || key.Matches(msg, m.keys.quit) && m.status != locationSearch || (msg.String() == "q" && m.status != locationSearch) {
 			return m, tea.Quit
 		}
 
