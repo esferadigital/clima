@@ -225,7 +225,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(msg.locations) == 1 {
 			m.location = msg.locations[0]
 			m.status = forecastLoading
-			return m, tea.Batch(getForecastCmd(m.location.Latitude, m.location.Longitude), m.forecastSpinner.Tick)
+			return m, tea.Batch(
+				getForecastCmd(m.location.Latitude, m.location.Longitude),
+				saveRecentLocationCmd(msg.locations[0]),
+				m.forecastSpinner.Tick,
+			)
 		}
 
 		// Show list for multiple results
@@ -433,3 +437,4 @@ func InitialModel(sink io.Writer) Model {
 		help:            help.New(),
 	}
 }
+
