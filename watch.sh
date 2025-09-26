@@ -6,5 +6,5 @@ watchexec \
     --wrap-process session \
     --clear \
     --exts go,mod,sum \
-    -- "go run main.go --debug"
+    -- "go run cmd/main.go --debug"
 

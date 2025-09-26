@@ -1,21 +1,17 @@
-package tui
+package store
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 
-	"github.com/esferadigital/clima/openmeteo"
+	"github.com/esferadigital/clima/internal/openmeteo"
 )
 
 const RECENT_LOCATIONS_FILE = "clima_recent.json"
 const MAX_RECENT_LOCATIONS = 5
 
-type RecentLocation struct {
-	openmeteo.GeocodingResult
-}
-
-func getRecentLocationsPath() (string, error) {
+func getRecentPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -29,8 +25,22 @@ func getRecentLocationsPath() (string, error) {
 	return filepath.Join(configDir, RECENT_LOCATIONS_FILE), nil
 }
 
-func loadRecentLocations() ([]openmeteo.GeocodingResult, error) {
-	path, err := getRecentLocationsPath()
+func saveRecent(locations []openmeteo.GeocodingResult) error {
+	path, err := getRecentPath()
+	if err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(locations, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+func LoadRecentLocations() ([]openmeteo.GeocodingResult, error) {
+	path, err := getRecentPath()
 	if err != nil {
 		return nil, err
 	}
@@ -43,40 +53,16 @@ func loadRecentLocations() ([]openmeteo.GeocodingResult, error) {
 		return nil, err
 	}
 
-	var locations []RecentLocation
+	var locations []openmeteo.GeocodingResult
 	if err := json.Unmarshal(data, &locations); err != nil {
 		return nil, err
 	}
 
-	results := make([]openmeteo.GeocodingResult, len(locations))
-	for i, loc := range locations {
-		results[i] = loc.GeocodingResult
-	}
-
-	return results, nil
+	return locations, nil
 }
 
-func saveRecentLocations(locations []openmeteo.GeocodingResult) error {
-	path, err := getRecentLocationsPath()
-	if err != nil {
-		return err
-	}
-
-	recentLocs := make([]RecentLocation, len(locations))
-	for i, loc := range locations {
-		recentLocs[i] = RecentLocation{loc}
-	}
-
-	data, err := json.MarshalIndent(recentLocs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, data, 0644)
-}
-
-func addRecentLocation(location openmeteo.GeocodingResult) error {
-	locations, err := loadRecentLocations()
+func AddRecentLocation(location openmeteo.GeocodingResult) error {
+	locations, err := LoadRecentLocations()
 	if err != nil {
 		return err
 	}
@@ -97,5 +83,6 @@ func addRecentLocation(location openmeteo.GeocodingResult) error {
 		locations = locations[:MAX_RECENT_LOCATIONS]
 	}
 
-	return saveRecentLocations(locations)
+	return saveRecent(locations)
 }
+
